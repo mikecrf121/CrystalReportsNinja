@@ -1,9 +1,11 @@
-﻿using CrystalDecisions.CrystalReports.Engine;
+using CrystalDecisions.CrystalReports.Engine;
 using CrystalDecisions.Shared;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Mail;
+using Newtonsoft.Json;
 
 namespace CrystalReportsNinja
 {
@@ -13,7 +15,7 @@ namespace CrystalReportsNinja
         private string _outputFilename;
         private string _outputFormat;
         private bool _printToPrinter;
-        private string _logfilename;
+        private string _defaultParamsOutputPath;
 
         private ReportDocument _reportDoc;
         private LogWriter _logger;
@@ -23,14 +25,19 @@ namespace CrystalReportsNinja
         /// <summary>
         /// Constructor
         /// </summary>
-        /// <param name="logfilename"></param>
-        public ReportProcessor(string logfilename, ArgumentContainer _ArgumentContainer)
+        public ReportProcessor()
         {
-            _reportDoc = new ReportDocument();
-            _logfilename = logfilename;
-            _logger = new LogWriter(_logfilename, _ArgumentContainer.EnableLogToConsole);
+            ReportArguments = new ArgumentContainer();
 
-            ReportArguments = _ArgumentContainer;
+            _reportDoc = new ReportDocument();
+        }
+
+        // This is Used for the Default Params Json Object
+        public class JsonParamDefaults
+        {
+            public string ParamName { get; set; }
+            public string ParamDefault { get; set; }
+
         }
 
         /// <summary>
@@ -57,18 +64,81 @@ namespace CrystalReportsNinja
         /// </summary>
         private void ProcessParameters()
         {
-            var paramCount = _reportDoc.ParameterFields.Count;
-            if (paramCount > 0)
+            List<JsonParamDefaults> _data = new List<JsonParamDefaults>();
+            if (_reportDoc.DataDefinition.ParameterFields.Count > 0)
             {
-                ParameterCore paraCore = new ParameterCore(_logfilename, ReportArguments);
+                ParameterCore paraCore = new ParameterCore(ReportArguments.LogFileName, ReportArguments);
                 paraCore.ProcessRawParameters();
-                var paramDefs = _reportDoc.DataDefinition.ParameterFields;
-                for (int i = 0; i < paramDefs.Count; i++)
+
+                foreach (ParameterFieldDefinition _ParameterFieldDefinition in _reportDoc.DataDefinition.ParameterFields)
                 {
-                    ParameterValues values = paraCore.GetParameterValues(paramDefs[i]);
-                    paramDefs[i].ApplyCurrentValues(values);
+                    if (!_ParameterFieldDefinition.IsLinked())
+                    {
+                        ParameterValues values = paraCore.GetParameterValues(_ParameterFieldDefinition);
+                        _ParameterFieldDefinition.ApplyCurrentValues(values);
+                    }
                 }
             }
+            ///Where im going to be gathering the daefult params from the .rpt file 
+            ///and adding them to a text file in the form of json
+            /// added December 2019, very useful for anyone needing these values
+            ///
+            var paramDefs = _reportDoc.DataDefinition.ParameterFields;
+            for (int i = 0; i < paramDefs.Count; i++)
+            {
+                ParameterCore paraCore = new ParameterCore(ReportArguments.LogFileName, ReportArguments);
+                paraCore.ProcessRawParameters();
+                ParameterValues values = paraCore.GetParameterValues(paramDefs[i]);
+                // System.Console.WriteLine("values has been set for index " + i);
+                //*********************************************************************
+                // Where im utilizing the the loop for all params to get names and all
+                // DEFAULT PARAM values defined within the actual .rpt file
+                //*********************************************************************
+
+                var nm = paramDefs[i].Name.ToString();
+                //Console.WriteLine("Parameter name: " + nm);
+                var count = nm.Count(f => f == '.');
+                var foundInList = _data.Any(param => param.ParamName == nm);
+                if (count == 0 && !foundInList)
+                {
+                    // default param value
+                    if (paramDefs[i] != null && paramDefs[i].DefaultValues != null && paramDefs[i].DefaultValues.Count > 0)
+                    {
+                        // System.Console.WriteLine("inside if check for index " + i);
+                        var te1 = (paramDefs[i].DefaultValues[0] as CrystalDecisions.Shared.ParameterDiscreteValue).Value;
+                        // System.Console.WriteLine("te1 set for index " + i);
+                        // param name associated with default param
+                        var n = paramDefs[i].Name;
+                        if (n.Contains("@"))
+                        {
+                            n = n.Substring(1);
+                        };
+                        // System.Console.WriteLine("n set for index " + i);
+                        // adding to object             
+                        _data.Add(new JsonParamDefaults()
+                        {
+                            ParamName = n,
+                            ParamDefault = te1.ToString()
+                        });
+
+                    }
+              
+                }
+            }
+
+            //converting object to serialized json format
+            string json = JsonConvert.SerializeObject(_data.ToArray());
+            //write string to file
+            //System.Console.WriteLine("WRITING JSON TO TEST FILE......");
+            _defaultParamsOutputPath = ReportArguments.ParamDefaultsOutputPath;
+
+            //This is where the JSON data is being written to a text file for param defaults
+            System.IO.File.WriteAllText(@_defaultParamsOutputPath, json);
+
+
+
+
+
         }
 
         /// <summary>
@@ -315,6 +385,8 @@ namespace CrystalReportsNinja
         {
             try
             {
+                _logger = new LogWriter(ReportArguments.LogFileName, ReportArguments.EnableLogToConsole);
+
                 LoadReport();
                 ValidateOutputConfigurations();
 
