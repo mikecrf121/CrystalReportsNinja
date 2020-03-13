@@ -220,4 +220,5 @@ Email Report Example
 -F Z:\CrystalReportsNinja\CrystalReports\ConsignaStoreInventoryValue.rpt -E pdf -O Z:\CrystalReportsNinja\Output\Test.pdf -a "@CustomerId:12345" -a "@Warehouse:987" -M -MF "Report1@company.com" -MT "good_user@company.com" -MS "Testing Ninja" -MZ "mail.company.com"
 
 ### -PD Parameter Defaults
-If you want parameter Defaults.. specify the output path of where the default Parameters will be outputed, in JSON format
+If you want parameter Defaults.. specify the output path of where the default Parameters will be outputed, in JSON format.
+Parameters extracted from the .rpt file at run time
