@@ -46,6 +46,8 @@ The only mandatory argument is "-F", in which is for user to specify a Crystal R
 * -MT The Address that the email should be sent to.
 * -MS The Text that should appear in the Subject Line of the Email.
 * -MZ The SMTP server address.
+* -PD Parameter Defaults output file
+
 
 ### -F, Crystal Reports source file
 This is the only mandatory (must specify) argument, it allows your to specify the Crystal Reports filename to be exported.
@@ -216,3 +218,6 @@ c:\>CrystalReportsNinja -F report101.rpt -E print -N "HP LaserJet 1200" -C 3
 
 Email Report Example
 -F Z:\CrystalReportsNinja\CrystalReports\ConsignaStoreInventoryValue.rpt -E pdf -O Z:\CrystalReportsNinja\Output\Test.pdf -a "@CustomerId:12345" -a "@Warehouse:987" -M -MF "Report1@company.com" -MT "good_user@company.com" -MS "Testing Ninja" -MZ "mail.company.com"
+
+### -PD Parameter Defaults
+If you want parameter Defaults.. specify the output path of where the default Parameters will be outputed, in JSON format
