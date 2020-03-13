@@ -3,7 +3,9 @@ using CrystalDecisions.Shared;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Mail;
+using Newtonsoft.Json;
 
 namespace CrystalReportsNinja
 {
@@ -13,7 +15,7 @@ namespace CrystalReportsNinja
         private string _outputFilename;
         private string _outputFormat;
         private bool _printToPrinter;
-        private string _logfilename;
+        private string _defaultParamsOutputPath;
 
         private ReportDocument _reportDoc;
         private LogWriter _logger;
@@ -23,14 +25,19 @@ namespace CrystalReportsNinja
         /// <summary>
         /// Constructor
         /// </summary>
-        /// <param name="logfilename"></param>
-        public ReportProcessor(string logfilename, ArgumentContainer _ArgumentContainer)
+        public ReportProcessor()
         {
-            _reportDoc = new ReportDocument();
-            _logfilename = logfilename;
-            _logger = new LogWriter(_logfilename, _ArgumentContainer.EnableLogToConsole);
+            ReportArguments = new ArgumentContainer();
 
-            ReportArguments = _ArgumentContainer;
+            _reportDoc = new ReportDocument();
+        }
+
+        // This is Used for the Default Params Json Object
+        public class JsonParamDefaults
+        {
+            public string ParamName { get; set; }
+            public string ParamDefault { get; set; }
+
         }
 
         /// <summary>
@@ -57,20 +64,62 @@ namespace CrystalReportsNinja
         /// </summary>
         private void ProcessParameters()
         {
-            var paramCount = _reportDoc.ParameterFields.Count;
-            if (paramCount > 0)
+            List<JsonParamDefaults> _data = new List<JsonParamDefaults>();
+            if (_reportDoc.DataDefinition.ParameterFields.Count > 0)
             {
-                ParameterCore paraCore = new ParameterCore(_logfilename, ReportArguments);
+                ParameterCore paraCore = new ParameterCore(ReportArguments.LogFileName, ReportArguments);
                 paraCore.ProcessRawParameters();
-                var paramDefs = _reportDoc.DataDefinition.ParameterFields;
-                for (int i = 0; i < paramDefs.Count; i++)
+
+                foreach (ParameterFieldDefinition _ParameterFieldDefinition in _reportDoc.DataDefinition.ParameterFields)
                 {
-                    ParameterValues values = paraCore.GetParameterValues(paramDefs[i]);
-                    paramDefs[i].ApplyCurrentValues(values);
+                    if (!_ParameterFieldDefinition.IsLinked())
+                    {
+                        ParameterValues values = paraCore.GetParameterValues(_ParameterFieldDefinition);
+                        _ParameterFieldDefinition.ApplyCurrentValues(values);
+                    }
                 }
             }
-        }
+            var paramDefs = _reportDoc.DataDefinition.ParameterFields;
+            for (int i = 0; i < paramDefs.Count; i++)
+            {
+                ParameterCore paraCore = new ParameterCore(ReportArguments.LogFileName, ReportArguments);
+                paraCore.ProcessRawParameters();
+                ParameterValues values = paraCore.GetParameterValues(paramDefs[i]);
+                // System.Console.WriteLine("values has been set for index " + i);
+                //*********************************************************************
+                // Where im utilizing the the loop for all params to get names and all
+                // DEFAULT PARAM values defined within the actual .rpt file
+                //*********************************************************************
+                var names = paramDefs[i].Name.ToString();
+                //Console.WriteLine("Parameter name: " + nm);
+                var count = names.Count(f => f == '.');
+                var foundInList = _data.Any(param => param.ParamName == names);
+                if (count == 0 && !foundInList)
+                {
+                    // default param value
+                    if (paramDefs[i] != null && paramDefs[i].DefaultValues != null && paramDefs[i].DefaultValues.Count > 0)
+                    {
+                        var defaultParamName = paramDefs[i].Name;
+                        var defaultParamValue = (paramDefs[i].DefaultValues[0] as CrystalDecisions.Shared.ParameterDiscreteValue).Value;
+                        if (defaultParamName.Contains("@"))
+                        {
+                            defaultParamName = defaultParamName.Substring(1);
+                        };            
+                        _data.Add(new JsonParamDefaults()
+                            {
+                            ParamName = defaultParamName,
+                            ParamDefault = defaultParamValue.ToString()
+                            });
+                    }              
+                }
+            }
+            string json = JsonConvert.SerializeObject(_data.ToArray());
+            _defaultParamsOutputPath = ReportArguments.ParamDefaultsOutputPath;
+            System.IO.File.WriteAllText(@_defaultParamsOutputPath, json);
+            _logger.Write(string.Format("Output of Default Params is at: {0}", _defaultParamsOutputPath));
+            Console.WriteLine(string.Format("Output of Default Params : {0}", _defaultParamsOutputPath));
 
+        }
         /// <summary>
         /// Validate configurations related to program output.
         /// </summary>
@@ -315,6 +364,8 @@ namespace CrystalReportsNinja
         {
             try
             {
+                _logger = new LogWriter(ReportArguments.LogFileName, ReportArguments.EnableLogToConsole);
+
                 LoadReport();
                 ValidateOutputConfigurations();
 

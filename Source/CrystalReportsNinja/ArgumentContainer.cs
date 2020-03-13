@@ -49,6 +49,8 @@ namespace CrystalReportsNinja
         /// </summary>
         public List<string> ParameterCollection { get; set; }
 
+        public String LogFileName { get; set; }
+
         //below are action related properties
 
         /// <summary>
@@ -115,6 +117,14 @@ namespace CrystalReportsNinja
         /// </summary>
         public bool EnableLogToConsole { get; set; }
 
+        /// <summary>
+        /// Write log output to Console
+        /// </summary>
+        public string ParamDefaultsOutputPath { get; set; }
+
+
+
+
         public ArgumentContainer()
         {
             // Assigning default values
@@ -131,6 +141,7 @@ namespace CrystalReportsNinja
             EmailSubject = "Crystal Reports Ninja";
             EmailKeepFile = false;
             EnableLogToConsole = false;
+            LogFileName = String.Empty;
 
             // Collection of string to store parameters
             ParameterCollection = new List<string>();
@@ -156,6 +167,8 @@ namespace CrystalReportsNinja
                             ReportPath = parameters[i + 1];
                         else if (parameters[i].ToUpper() == "-O")
                             OutputPath = parameters[i + 1];
+                        else if (parameters[i].ToUpper() == "-PD")
+                            ParamDefaultsOutputPath = parameters[i + 1];
                         else if (parameters[i].ToUpper() == "-S")
                             ServerName = parameters[i + 1];
                         else if (parameters[i].ToUpper() == "-D")
